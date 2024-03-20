@@ -205,26 +205,26 @@ resultBuffer = processedSpectrumBuffer
 -------- Draw --------
 obj.load ("figure", "â~", color, thickness)
 if displayType ~= 1 then
-	for i = 1, #resultBuffer do
-		local posX = remap (i / #resultBuffer, 0, 1, startPoint, endPoint)
-		obj.draw (posX, resultBuffer[i] * -heightMulplier * 0.0001, 0)
+	for i = 0, #resultBuffer - 1 do
+		local posX = remap (i / (#resultBuffer - 1), 0, 1, startPoint, endPoint)
+		obj.draw (posX, resultBuffer[i + 1] * -heightMulplier * 0.0001, 0)
 	end
 end
 
 obj.load ("figure", "éläpå`", color, 1)
 if displayType ~= 2 then
-	for i = 1, #resultBuffer do
+	for i = 0, #resultBuffer - 1 do
 		local S = {}
-		for i = 1, 4 do
-			S[i] = {}
+		for j = 1, 4 do
+			S[j] = {}
 		end
 
-		local posX = remap (i / #resultBuffer, 0, 1, startPoint, endPoint)
+		local posX = remap (i / (#resultBuffer - 1), 0, 1, startPoint, endPoint)
 
 		S[1][1] = posX - (thickness / 2)
-		S[1][2] = resultBuffer[i] * heightMulplier * 0.0001
+		S[1][2] = resultBuffer[i + 1] * heightMulplier * 0.0001
 		S[2][1] = posX + (thickness / 2)
-		S[2][2] = resultBuffer[i] * heightMulplier * 0.0001
+		S[2][2] = resultBuffer[i + 1] * heightMulplier * 0.0001
 
 		S[3][1] = posX + (thickness / 2)
 		S[3][2] = 0
