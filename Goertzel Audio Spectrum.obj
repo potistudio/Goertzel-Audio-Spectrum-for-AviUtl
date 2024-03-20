@@ -4,7 +4,7 @@
 --track2: バンド数, 0, 1000, 100
 --track3: 高さ, 0, 40, 24
 
---dialog: 色/col, local color=0xffffff; 開始周波数, local minFrequency=0; 終了周波数, local maxFrequency=400; オーディオデュレーション, local audioDuration=120;
+--dialog: 色/col, local color=0xffffff; 開始周波数, local minFrequency=0; 終了周波数, local maxFrequency=400; オーディオデュレーション, local audioDuration=120; 描画タイプ, local displayType=0; 太さ, local thickness=6;
 
 -------- Import rikky_module --------
 package.cpath = package.cpath .. ";" .. obj.getinfo ("script_path"):match ("(.*\\).*\\") .. "?.dll"
@@ -203,11 +203,36 @@ end
 resultBuffer = processedSpectrumBuffer
 
 -------- Draw --------
-obj.load ("figure", "円", color, 8)
+obj.load ("figure", "円", color, thickness)
+if displayType ~= 1 then
+	for i = 1, #resultBuffer do
+		local posX = remap (i / #resultBuffer, 0, 1, startPoint, endPoint)
+		obj.draw (posX, resultBuffer[i] * -heightMulplier * 0.0001, 0)
+	end
+end
 
-for i = 1, #resultBuffer do
-	local posX = remap (i / #resultBuffer, 0, 1, startPoint, endPoint)
-	obj.draw (posX, resultBuffer[i] * -heightMulplier * 0.0001, 0)
+obj.load ("figure", "四角形", color, 1)
+if displayType ~= 2 then
+	for i = 1, #resultBuffer do
+		local S = {}
+		for i = 1, 4 do
+			S[i] = {}
+		end
+
+		local posX = remap (i / #resultBuffer, 0, 1, startPoint, endPoint)
+
+		S[1][1] = posX - (thickness / 2)
+		S[1][2] = resultBuffer[i] * heightMulplier * 0.0001
+		S[2][1] = posX + (thickness / 2)
+		S[2][2] = resultBuffer[i] * heightMulplier * 0.0001
+
+		S[3][1] = posX + (thickness / 2)
+		S[3][2] = 0
+		S[4][1] = posX - (thickness / 2)
+		S[4][2] = 0
+
+		obj.drawpoly (S[1][1], -S[1][2], 0, S[2][1], -S[2][2], 0, S[3][1], S[3][2], 0, S[4][1], S[4][2], 0)
+	end
 end
 
 -------- Post --------
