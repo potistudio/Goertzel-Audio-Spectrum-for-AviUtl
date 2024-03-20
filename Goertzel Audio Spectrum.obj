@@ -1,10 +1,10 @@
 
---track0: 始点, -2000, 2000, -400
---track1: 終点, -2000, 2000, 400
---track2: バンド数, 0, 1000, 100
+--track0: 始点, -2000, 2000, -600
+--track1: 終点, -2000, 2000, 600
+--track2: バンド数, 0, 1000, 120
 --track3: 高さ, 0, 40, 24
 
---dialog: 色/col, local color=0xffffff; 開始周波数, local minFrequency=0; 終了周波数, local maxFrequency=400; オーディオデュレーション, local audioDuration=120; 描画タイプ, local displayType=0; 太さ, local thickness=6;
+--dialog: 色/col, local color=0xffffff; 開始周波数, local minFrequency=0; 終了周波数, local maxFrequency=400; オーディオデュレーション, local audioDuration=120; 描画タイプ, local displayType=1; 太さ, local thickness=8;
 
 -------- Import rikky_module --------
 package.cpath = package.cpath .. ";" .. obj.getinfo ("script_path"):match ("(.*\\).*\\") .. "?.dll"
