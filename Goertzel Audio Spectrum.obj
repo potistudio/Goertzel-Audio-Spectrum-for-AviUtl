@@ -1,0 +1,215 @@
+
+--track0: 始点, -2000, 2000, -400
+--track1: 終点, -2000, 2000, 400
+--track2: バンド数, 0, 1000, 100
+--track3: 高さ, 0, 40, 24
+
+--dialog: 色/col, local color=0xffffff; 開始周波数, local minFrequency=0; 終了周波数, local maxFrequency=400; オーディオデュレーション, local audioDuration=120;
+
+-------- Import rikky_module --------
+package.cpath = package.cpath .. ";" .. obj.getinfo ("script_path"):match ("(.*\\).*\\") .. "?.dll"
+local bool, rikky_module = pcall (require, "rikky_module")
+
+if not bool then
+	obj.load ("<s100>require rikky_module!")
+	obj.draw()
+
+	return
+end
+
+-------- Pre --------
+obj.setfont ("MS UI Gothic", 50, 0, 0xffffff)
+obj.setoption ("drawtarget", "tempbuffer", obj.screen_w, obj.screen_h)
+
+local startPoint = obj.track0
+local endPoint = obj.track1
+local outputSamplesCount = obj.track2
+local heightMulplier = obj.track3
+
+local WINDOW_SKEW = 0
+local SMOOTHING_TIME_CONSTANT = 0
+local SAMPLE_RATE = 48000
+
+local currentFrame, totalFrame = rikky_module.getinfo ("frame")
+
+local function round (x)
+	local a, b = math.modf (x)
+
+	if b >= 0.5 then
+		return a + 1
+	end
+
+	return a
+end
+
+local function remap (x, in_min, in_max, out_min, out_max)
+	return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
+end
+
+local function dbToLinear (x)
+	return 10 ^ (x / 20)
+end
+
+local function ascale (x, _nthRoot, _dbRange, _useAbsolute)
+	local db = 0
+
+	if _useAbsolute then
+		db = 0
+	else
+		db = dbToLinear (-_dbRange) ^ (1 / _nthRoot)
+	end
+
+	return remap (x ^ (1 / _nthRoot), db, 1, 0, 1)
+end
+
+-- pos: number
+-- truncate: bool
+-- skew: number (0 ~ 1)
+-- return -> number
+local function applyWindow (_pos, _truncate, _skew)
+	local x
+
+	if (_skew > 0) then
+		x = ((_pos / 2 - 0.5) / (1 - (_pos / 2 - 0.5) * 10 * (_skew ^ 2))) / (1 / (1 + 10 * (_skew ^ 2))) * 2 + 1
+	else
+		x = ((_pos / 2 + 0.5) / (1 + (_pos / 2 + 0.5) * 10 * (_skew ^ 2))) / (1 / (1 + 10 * (_skew ^ 2))) * 2 - 1
+	end
+
+	if (_truncate and math.abs(x) > 1) then
+		return 0
+	end
+
+	return 0.54 + 0.46 * math.cos (x * math.pi)
+end
+
+local function applyWeight (x, _amount)
+	local f2 = x ^ 2
+
+	return (1.2588966 * 148840000 * (f2 ^ 2) / ((f2 + 424.36) * math.sqrt((f2 + 11599.29) * (f2 + 544496.41)) * (f2 + 148840000))) ^ _amount
+end
+
+-- x: number
+-- centerFreq: number
+-- amount: number
+-- return -> number
+local function calcFreqTilt (x, _centerFreq, _amount)
+	if math.abs (_amount) > 0 then
+		return 10 ^ (math.log(x / _centerFreq, 2) * _amount / 20)
+	else
+		return 1
+	end
+end
+
+-- return -> table
+-- samples: number
+-- minFreq: number
+-- maxFreq: number
+local function generateFreqBands (_samples, _minFreq, _maxFreq)
+	local freqArray = {}
+
+	for i = 0, _samples - 1 do
+		freqArray[i + 1] = {}
+
+		freqArray[i + 1][1] = remap (i - 0.5, 0, _samples - 1, _minFreq, _maxFreq) -- Low
+		freqArray[i + 1][2] = remap (i, 0, _samples - 1, _minFreq, _maxFreq) -- Center
+		freqArray[i + 1][3] = remap (i + 0.5, 0, _samples - 1, _minFreq, _maxFreq) -- High
+	end
+
+	return freqArray
+end
+
+-- waveform: table
+-- coeff: number
+-- return -> number
+local function calcGoertzel (_waveform, _coeff)
+	local f1 = 0
+	local f2 = 0
+	local sine = 0
+
+	for i = 1, #_waveform do
+		sine = _waveform[i] + _coeff * f1 - f2
+		f2 = f1
+		f1 = sine
+	end
+
+	return math.sqrt (f1 ^ 2 + f2 ^ 2 - _coeff * f1 * f2) / #_waveform
+end
+
+-- waveform: table
+-- return -> table
+local function calcGoertzelSpectrum (_waveform)
+	local result = {}
+	local freqBands = generateFreqBands (outputSamplesCount, minFrequency, maxFrequency)
+
+	for i = 1, #freqBands do
+		local coeff = 2 * math.cos (2 * math.pi * freqBands[i][2] / SAMPLE_RATE)
+		result[i] = calcGoertzel (_waveform, coeff)
+	end
+
+	return result
+end
+
+-------- Main --------
+local FFT_SIZE = round (audioDuration * (SAMPLE_RATE * 0.001))
+local freqBands = generateFreqBands (outputSamplesCount, minFrequency, maxFrequency)
+
+local rawWaveformBuffer = {}
+local processedWaveformBuffer = {}
+local rawSpectrumBuffer = {}
+local processedSpectrumBuffer = {}
+
+local resultBuffer = {}
+
+-- Merge Waveform
+for i = 81, 1, -1 do
+	local waveform = rikky_module.audiobuffer (currentFrame - (i - 1), "PCM", "absolute", "monaural", 4096, 0)
+
+	for j = 1, #waveform do
+		rawWaveformBuffer[#rawWaveformBuffer + 1] = waveform[j]
+	end
+end
+
+-- Process Waveform
+local norm = 0
+
+for i = 0, FFT_SIZE - 1 do
+	local x = i * 2 / (FFT_SIZE - 1) - 1
+	local w = applyWindow (x, true, WINDOW_SKEW)
+
+	processedWaveformBuffer[i + 1] = rawWaveformBuffer[(i + 1) + (#rawWaveformBuffer - FFT_SIZE)] * w
+	norm = norm + w
+end
+
+for i = 1, #processedWaveformBuffer do
+	processedWaveformBuffer[i] = processedWaveformBuffer[i] * (#processedWaveformBuffer / norm)
+end
+
+rawSpectrumBuffer = calcGoertzelSpectrum (processedWaveformBuffer)
+
+for i = 1, #rawSpectrumBuffer do
+	local source = 0
+
+	if rawSpectrumBuffer[i] ~= nil then
+		source = rawSpectrumBuffer[i] * dbToLinear (heightMulplier) * calcFreqTilt (freqBands[i][2], 440, 0) * applyWeight (freqBands[i][2], 0)
+	end
+
+	processedSpectrumBuffer[i] = source * (1 - SMOOTHING_TIME_CONSTANT)
+end
+
+for i = 1, #processedSpectrumBuffer do
+	resultBuffer[i] = math.max (ascale(processedSpectrumBuffer[i], 1, 70, true), 0)
+end
+
+resultBuffer = processedSpectrumBuffer
+
+-------- Draw --------
+obj.load ("figure", "円", color, 8)
+
+for i = 1, #resultBuffer do
+	local posX = remap (i / #resultBuffer, 0, 1, startPoint, endPoint)
+	obj.draw (posX, resultBuffer[i] * -heightMulplier * 0.0001, 0)
+end
+
+-------- Post --------
+obj.load ("tempbuffer")
+obj.effect()
