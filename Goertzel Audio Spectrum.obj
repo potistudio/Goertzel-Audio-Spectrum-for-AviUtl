@@ -4,7 +4,7 @@
 --track2: バンド数, 0, 1000, 120, 1
 --track3: 高さ, 0, 40, 24
 
---dialog: 色/col, local color=0xffffff; 開始周波数, local minFrequency=0; 終了周波数, local maxFrequency=400; オーディオデュレーション, local audioDuration=120; 描画タイプ, local displayType=1; 太さ, local thickness=8;
+--dialog: 色/col, local color=0xffffff; 開始周波数, local minFrequency=0; 終了周波数, local maxFrequency=400; オーディオデュレーション, local audioDuration=120; オーディオオフセット, local audioOffset=0; 描画タイプ, local displayType=1; 太さ, local thickness=8;
 
 -------- Import rikky_module --------
 package.cpath = package.cpath .. ";" .. obj.getinfo ("script_path"):match ("(.*\\).*\\") .. "?.dll"
@@ -162,7 +162,7 @@ local resultBuffer = {}
 
 -- Merge Waveform
 for i = 81, 1, -1 do
-	local waveform = rikky_module.audiobuffer (currentFrame - (i - 1), "PCM", "absolute", "monaural", 4096, 0)
+	local waveform = rikky_module.audiobuffer (currentFrame - (i - 1) + audioOffset, "PCM", "absolute", "monaural", 4096, 0)
 
 	for j = 1, #waveform do
 		rawWaveformBuffer[#rawWaveformBuffer + 1] = waveform[j]
